@@ -10,10 +10,15 @@
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, split, explode, lower, regexp_extract
+#from ....bookdir import book_dir
 
+book_dir ="/home/nyck33/Documents/DataEngineering/DataAnalysisWithPythonAndPySpark"
+
+print(f'book_dir: {book_dir}')
 spark = SparkSession.builder.getOrCreate()
+directory = book_dir + "/code/Ch02/end_of_chapter.py"
 
-book = spark.read.text("../../data/gutenberg_books/1342-0.txt")
+book = spark.read.text(directory)
 
 lines = book.select(split(book.value, " ").alias("line"))
 
@@ -26,3 +31,5 @@ words_clean = words_lower.select(
 )
 
 words_nonull = words_clean.where(col("word") != "")
+
+print("Number of words:", words_nonull.count())
