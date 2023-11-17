@@ -9,21 +9,27 @@ import pyspark.sql.functions as F
 import pandas as pd
 
 
-spark = SparkSession.builder.appName(
-    "Counting word occurences from a book."
-).getOrCreate()
+from pyspark.sql import SparkSession
+
+# Initialize SparkSession with the RAPIDS plugin
+spark = SparkSession.builder \
+    .appName("Counting word occurrences from a book with GPU") \
+    .config("spark.plugins", "com.nvidia.spark.SQLPlugin") \
+    .config("spark.rapids.memory.gpu.pooling.enabled", "false") \
+    .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
 
-# If you need to read multiple text files, replace `1342-0` by `*`.
-df = (
-    spark.read.text("../../data/gutenberg_books/1342-0.txt")
-    .select(F.split(F.col("value"), " ").alias("line"))
-    .select(F.explode(F.col("line")).alias("word"))
-    .select(F.lower(F.col("word")).alias("word"))
-    .select(F.regexp_extract(F.col("word"), "[a-z']*", 0).alias("word"))
-    .where(F.col("word") != "")
-)
+# Reading the text file and performing transformations using operations compatible with the GPU
+df = (spark.read.text("../../data/gutenberg_books/1342-0.txt")
+      .selectExpr("split(value, ' ') as line")  # Use `selectExpr` for compatible split operation
+      .withColumn("word", F.explode(F.col("line")))
+      .withColumn("word", F.lower(F.col("word")))
+      .withColumn("word", F.regexp_extract(F.col("word"), "[a-z']*", 0))
+      .filter(F.col("word") != ""))
+
+# The remaining code for conversion to cuDF and word counting can remain the same
+# ... (rest of your code)
 
 # Convert Spark DataFrame to cuDF DataFrame
 cudf_df = cudf.DataFrame.from_pandas(df.toPandas())
