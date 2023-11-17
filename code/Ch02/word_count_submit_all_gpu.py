@@ -27,12 +27,13 @@ with open(directory, 'r') as file:
 pdf = pd.DataFrame(lines, columns=['line'])
 '''
 
-pandas_df = pd.read_parquet(parquet_directory)
+#pandas_df = pd.read_parquet(parquet_directory)
 
-print(pandas_df.head())
+#print(pandas_df.head())
 # Convert Pandas DataFrame to cuDF DataFrame
-cudf_df = cudf.DataFrame.from_pandas(pandas_df)
-
+#cudf_df = cudf.DataFrame.from_pandas(pandas_df)
+# read parquet file into cudf dataframe
+cudf_df = cudf.read_parquet(parquet_directory)
 
 # Perform operations on the GPU
 cudf_df['value'] = cudf_df['value'].str.lower()

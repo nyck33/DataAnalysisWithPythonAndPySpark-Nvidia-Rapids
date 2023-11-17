@@ -9,13 +9,14 @@ The purpose of this program is to perform an efficient word count on a collectio
    - **Why**: We converted original text files to the Parquet format to benefit from its efficient columnar storage, which improves read and write operations and offers better compression than row-based text files.
    - **How**: Using Apache Spark, we read the text files and wrote them out as Parquet files. This step also implicitly partitions the data, resulting in multiple part files, which is beneficial for distributed processing.
 
-2. **Reading Parquet Files:**
-   - **Why**: Reading the Parquet files as a DataFrame allows us to handle the data in a structured format and benefit from the performance enhancements of Parquet.
-   - **How**: We used Pandas to read the Parquet files into a DataFrame. Pandas automatically recognizes and combines the part files into a single DataFrame.
 
-3. **Dataframe Conversion for GPU Processing:**
-   - **Why**: To accelerate text processing tasks through parallel computation capabilities of the GPU.
-   - **How**: We converted the Pandas DataFrame to a cuDF DataFrame, which is designed for GPU operations.
+2. **Reading Parquet Files:**
+   - **Why**: Reading Parquet files directly into a cuDF DataFrame allows for handling the data in a structured format while leveraging the GPU for performance enhancements inherent in Parquet.
+   - **How**: We used cuDF's direct I/O capabilities to read the Parquet files into a cuDF DataFrame, avoiding the need to use Pandas and minimizing memory overhead.
+
+3. **GPU-Accelerated Data Processing:**
+   - **Why**: The aim is to utilize the parallel computation capabilities of the GPU to accelerate data processing tasks, which are computationally intensive.
+   - **How**: Since the data is already in a cuDF DataFrame after reading from the Parquet file, we proceed directly with GPU-accelerated operations for text processing.
 
 4. **Text Processing with GPU:**
    - **Why**: String operations can be computationally intensive, and performing these on the GPU offers significant performance improvements.
@@ -42,19 +43,16 @@ The program successfully leverages a hybrid approach combining Spark's distribut
 | Operation                                      | Processing Unit |
 |------------------------------------------------|-----------------|
 | Initialize SparkSession with RAPIDS plugin     | CPU             |
-| Read Parquet into Pandas DataFrame             | CPU             |
-| Convert Pandas DataFrame to cuDF DataFrame     | CPU             |
+| Read Parquet directly into cuDF DataFrame      | GPU             |
 | Lowercase string operation (`str.lower`)       | GPU             |
 | Split string into words (`str.split`)          | GPU             |
 | Regular expression extraction (`str.extract`)  | GPU             |
 | Filter non-empty words                         | GPU             |
 | Group by word and count occurrences            | GPU             |
 | Sort word counts (`sort_values`)               | GPU             |
-| Convert cuDF DataFrame to Pandas DataFrame     | CPU             |
-| Create Spark DataFrame from Pandas DataFrame   | CPU             |
+| Convert cuDF DataFrame to Pandas DataFrame (if needed for further processing or output) | CPU             |
+| Create Spark DataFrame from Pandas DataFrame (if needed for further processing or output)   | CPU             |
 | Display top 10 word counts (`show`)            | CPU             |
-| Write Spark DataFrame to CSV file              | CPU             |
-
-Please note that the conversion between Pandas and cuDF DataFrames, while initiated on the CPU, may involve copying data to or from the GPU's memory. The actual string manipulation, filtering, and sorting operations on the cuDF DataFrame are performed on the GPU, which can significantly speed up these computations compared to CPU processing.
+| Write Spark DataFrame to CSV file (if required) | CPU             |
 
 Writing the results to a CSV file is a Spark action that typically takes place on the CPU, as it involves I/O operations that are not accelerated by the GPU. The warnings in the output indicate that while the RAPIDS Accelerator is enabled, certain Spark operations related to data writing do not have GPU support and are executed on the CPU.
