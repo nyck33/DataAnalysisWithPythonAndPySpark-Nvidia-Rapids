@@ -17,18 +17,26 @@ spark = SparkSession.builder \
 spark.sparkContext.setLogLevel("WARN")
 
 # Read the text file into a Pandas DataFrame
-directory = "/home/nyck33/Documents/DataEngineering/DataAnalysisWithPythonAndPySpark/code/data/gutenberg_books/1342-0.txt"
+parquet_directory = "/home/nyck33/Documents/DataEngineering/DataAnalysisWithPythonAndPySpark/code/data/gutenberg_books/gutentberg_1342.parquet"
 
+#pdf = spark.read.text(directory)
+
+'''
 with open(directory, 'r') as file:
     lines = file.readlines()
 pdf = pd.DataFrame(lines, columns=['line'])
+'''
 
+pandas_df = pd.read_parquet(parquet_directory)
+
+print(pandas_df.head())
 # Convert Pandas DataFrame to cuDF DataFrame
-cudf_df = cudf.DataFrame.from_pandas(pdf)
+cudf_df = cudf.DataFrame.from_pandas(pandas_df)
+
 
 # Perform operations on the GPU
-cudf_df['line'] = cudf_df['line'].str.lower()
-cudf_df = cudf_df['line'].str.split(' ', expand=True).stack().reset_index(drop=True).to_frame(name='word')
+cudf_df['value'] = cudf_df['value'].str.lower()
+cudf_df = cudf_df['value'].str.split(' ', expand=True).stack().reset_index(drop=True).to_frame(name='word')
 cudf_df['word'] = cudf_df['word'].str.extract('([a-z\']*)')
 cudf_df = cudf_df[cudf_df['word'] != '']
 
