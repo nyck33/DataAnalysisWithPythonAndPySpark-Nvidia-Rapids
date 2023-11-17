@@ -16,7 +16,7 @@ book_dir ="/home/nyck33/Documents/DataEngineering/DataAnalysisWithPythonAndPySpa
 
 print(f'book_dir: {book_dir}')
 spark = SparkSession.builder.getOrCreate()
-directory = book_dir + "/code/Ch02/end_of_chapter.py"
+directory = book_dir + "/code/data/gutenberg_books/*.txt"
 
 book = spark.read.text(directory)
 
