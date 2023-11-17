@@ -1,60 +1,49 @@
 from pyspark.sql import SparkSession
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, lower, regexp_extract, split, explode
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType
-from pyspark.sql.functions import pandas_udf, PandasUDFType
+from pyspark.sql.types import StructType, StructField, StringType, LongType
 import cudf
-import cupy as cp
-import pyspark.sql.functions as F
 import pandas as pd
-
-
-from pyspark.sql import SparkSession
+import os
 
 # Initialize SparkSession with the RAPIDS plugin
+rapids_jar_path = os.path.expanduser("~/Documents/DataEngineering/rapids-4-spark_2.12-23.10.0.jar")
+
 spark = SparkSession.builder \
-    .appName("Counting word occurrences from a book with GPU") \
+    .appName("GPU Accelerated Word Count") \
     .config("spark.plugins", "com.nvidia.spark.SQLPlugin") \
     .config("spark.rapids.memory.gpu.pooling.enabled", "false") \
+    .config("spark.jars", rapids_jar_path) \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
 
-# Reading the text file and performing transformations using operations compatible with the GPU
-df = (spark.read.text("../../data/gutenberg_books/1342-0.txt")
-      .selectExpr("split(value, ' ') as line")  # Use `selectExpr` for compatible split operation
-      .withColumn("word", F.explode(F.col("line")))
-      .withColumn("word", F.lower(F.col("word")))
-      .withColumn("word", F.regexp_extract(F.col("word"), "[a-z']*", 0))
-      .filter(F.col("word") != ""))
+# Read the text file into a Pandas DataFrame
+directory = "/home/nyck33/Documents/DataEngineering/DataAnalysisWithPythonAndPySpark/code/data/gutenberg_books/1342-0.txt"
 
-# The remaining code for conversion to cuDF and word counting can remain the same
-# ... (rest of your code)
+with open(directory, 'r') as file:
+    lines = file.readlines()
+pdf = pd.DataFrame(lines, columns=['line'])
 
-# Convert Spark DataFrame to cuDF DataFrame
-cudf_df = cudf.DataFrame.from_pandas(df.toPandas())
+# Convert Pandas DataFrame to cuDF DataFrame
+cudf_df = cudf.DataFrame.from_pandas(pdf)
 
-# Define a Pandas UDF to count the word occurrences
-@pandas_udf("word string, count int", PandasUDFType.GROUPED_MAP)
-def count_words_udf(pdf: pd.DataFrame) -> pd.DataFrame:
-    # Count the word occurrences using cuDF
-    gdf = cudf.from_pandas(pdf)
-    counts = gdf.groupby("word").count().reset_index()
-    # Convert cuDF DataFrame to Pandas DataFrame
-    pdf_counts = counts.to_pandas()
-    return pdf_counts
+# Perform operations on the GPU
+cudf_df['line'] = cudf_df['line'].str.lower()
+cudf_df = cudf_df['line'].str.split(' ', expand=True).stack().reset_index(drop=True).to_frame(name='word')
+cudf_df['word'] = cudf_df['word'].str.extract('([a-z\']*)')
+cudf_df = cudf_df[cudf_df['word'] != '']
 
-# Apply the Pandas UDF to the cuDF DataFrame
-results = cudf_df.groupby("word").apply(count_words_udf)
+# Count word occurrences
+word_counts = cudf_df.groupby('word').size().reset_index(name='count')
 
-# Convert Pandas DataFrame to Spark DataFrame
-schema = StructType(
-    [
-        StructField("word", StringType(), True),
-        StructField("count", IntegerType(), True),
-    ]
-)
-results_spark = spark.createDataFrame(results.to_pandas(), schema=schema)
+# Define the schema for the Spark DataFrame
+schema = StructType([
+    StructField("word", StringType(), True),
+    StructField("count", LongType(), True)
+])
 
-results_spark.orderBy("count", ascending=False).show(10)
-results_spark.coalesce(1).write.mode("overwrite").option("header", "true").csv("output")
+# Convert cuDF DataFrame back to Spark DataFrame with schema
+word_counts_spark = spark.createDataFrame(word_counts.to_pandas(), schema=schema)
+
+# Show and save results
+word_counts_spark.orderBy("count", ascending=False).show(10)
+word_counts_spark.coalesce(1).write.mode("overwrite").option("header", "true").csv("output")
