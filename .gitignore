@@ -32,3 +32,8 @@ scribbles.*
 # References for chapters and appendixes
 chapter_reference.txt
 appendix_reference.txt
+
+*.csv 
+*.zip 
+*.crdownload
+/code/data/*
